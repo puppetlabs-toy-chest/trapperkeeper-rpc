@@ -1,12 +1,10 @@
 (ns puppetlabs.trapperkeeper.rpc.http
-  (:require [puppetlabs.trapperkeeper.rpc.core :refer [extract-body call-svc-function]]
+  (:require [puppetlabs.trapperkeeper.rpc.core :refer [extract-body call-local-svc-function]]
             [slingshot.slingshot :refer [try+]]
             [cheshire.core :as json]
             [clj-stacktrace.repl :refer [pst-str]]
             [compojure.core :refer [routes POST]]
             [ring.util.response :refer [response header]]))
-
-;; (log/warn message (clj-stacktrace.repl/pst-str exception))))
 
 (defn build-response [data]
   (-> data
@@ -21,7 +19,7 @@
          (let [{:keys [svc-id fn-name args]} (extract-body r)]
            (try+
 
-            (->> (call-svc-function settings get-service svc-id fn-name args)
+            (->> (call-local-svc-function settings get-service svc-id fn-name args)
                  (hash-map :result)
                  build-response)
 

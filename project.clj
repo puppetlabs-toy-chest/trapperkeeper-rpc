@@ -10,11 +10,12 @@
   :lein-release {:scm         :git
                  :deploy-via  :lein-deploy}
 
+  :source-paths ["src/clj"]
+  :java-source-paths ["src/java"]
+
   :deploy-repositories [["releases" {:url "https://clojars.org/repo"
                                      :username :env/clojars_jenkins_username
                                      :password :env/clojars_jenkins_password
                                      :sign-releases false}]]
 
-  :profiles {:dev {:dependenceies [[spyscope "0.1.4"]]
-                   :injections [(require 'spyscope.core)]}}
   :plugins [[lein-release "1.0.5"]])

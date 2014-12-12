@@ -1,24 +1,26 @@
-(ns puppetlabs.rbac.rpc
+(ns puppetlabs.trapperkeeper.rpc.core
   "TODO"
   (:require [clojure.java.io :as io]
             [puppetlabs.http.client.sync :as http]
             [slingshot.slingshot :refer [throw+]]
-            [cheshire.core :as json]))
+            [cheshire.core :as json])
+  (:import [puppetlabs.trapperkeeper.rpc RPCException RPCExecutionException]))
 
 ;; TODO
-;; * add error handling for rpc errors
-;; * figure out how to register custom encoders
 ;; * schema
-;; * serialization
+;; * serialization abstraction / custom encoders
 ;; * cert authentication
 
-(defn- handle-http-error! [response]
-  ;; TODO
-  nil)
+
+(defn- format-stacktrace [body]
+  (if-let [stacktrace (:stacktrace body)]
+    (format "Remote stacktrace:\n%s" stacktrace)
+    ""))
 
 (defn- handle-rpc-error! [body]
-  ;; TODO
-  nil)
+  (let [stacktrace (format-stacktrace body)
+        msg (format "%s%s" (:msg body) stacktrace)]
+    (throw (RPCExcecutionException. msg))))
 
 (defn extract-body [r]
   (let [body (:body r)]
@@ -35,15 +37,16 @@
         endpoint (get-in rpc-settings [svc-id :endpoint])]
 
     (when (nil? endpoint)
-      ;; TODO this is user-facing and should be a POJE
-      (throw+ {:type ::bad-cfg
-               :msg (format "Could not find rpc endpoint for service %s in settings." svc-id)}))
+      (throw (RPCException. (format "Could not find rpc endpoint for service %s in settings." svc-id))))
 
+    ;; TODO cert
     (let [response (http/post endpoint {:body (json/encode payload)
                                         :headers {"Content-Type" "application/json;charset=utf-8"}})]
 
       (when (not= 200 (:status response))
-        (handle-http-error! response))
+        (throw (RPCException. (format "RPC service did not return 200. Returned %s instead.\nReceived body\n: %s"
+                                      (:status response)
+                                      (:body response)))))
 
       (let [body (extract-body response)]
 
