@@ -4,7 +4,7 @@
             [puppetlabs.http.client.sync :as http]
             [slingshot.slingshot :refer [throw+]]
             [cheshire.core :as json])
-  (:import [puppetlabs.trapperkeeper.rpc RPCException RPCExecutionException]))
+  (:import [puppetlabs.trapperkeeper.rpc RPCException RPCConnectionException]))
 
 ;; TODO
 ;; * schema
@@ -18,8 +18,8 @@
 
 (defn- handle-rpc-error! [body]
   (let [stacktrace (format-stacktrace body)
-        msg (format "%s%s" (:msg body) stacktrace)]
-    (throw (RPCExecutionException. msg))))
+        msg (format "%s\n%s\n" (:msg body) stacktrace)]
+    (throw (RPCException. msg))))
 
 (defn extract-body [r]
   (let [body (:body r)]

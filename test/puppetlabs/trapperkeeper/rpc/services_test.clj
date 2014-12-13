@@ -8,7 +8,7 @@
             [puppetlabs.trapperkeeper.rpc.testutils.dummy-services.concrete :refer [rpc-test-service-concrete]]
             [puppetlabs.trapperkeeper.rpc.testutils.dummy-services.proxied :refer [rpc-test-service-proxied]]
             [puppetlabs.trapperkeeper.rpc.services :refer [rpc-server-service]])
-  (:import [puppetlabs.trapperkeeper.rpc RPCException RPCExecutionException]))
+  (:import [puppetlabs.trapperkeeper.rpc RPCException RPCConnectionException]))
 
 
 (def config
@@ -55,9 +55,11 @@
     (testing "and the specified function does not exist on the remote server"
       (testing "we see the expected exception"))
     (testing "and the remote function threw an exception"
-      (testing "we see an RPCExecutionException"
+      (testing "we see an RPCException"
         (testing "with the expected message")
         (testing "with a stacktrace")))
+    (testing "and the RPC server is not reachable"
+      (testing "we see an RPCConnectionException"))
     (testing "and the remote function worked"
       (let [result (add (get-service @client-app-atom :RPCTestService) 1 1)]
         (testing "we get the expected result"
