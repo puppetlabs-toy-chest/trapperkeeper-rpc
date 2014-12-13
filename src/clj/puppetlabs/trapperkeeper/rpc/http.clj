@@ -19,7 +19,7 @@
          (let [{:keys [svc-id fn-name args]} (extract-body r)]
            (try+
 
-            (->> (call-local-svc-fn settings get-service svc-id fn-name args)
+            (->> (call-local-svc-fn settings get-service (keyword svc-id) fn-name args)
                  (hash-map :result)
                  build-response)
 

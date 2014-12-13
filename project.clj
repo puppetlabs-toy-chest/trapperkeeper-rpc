@@ -22,7 +22,8 @@
   :java-source-paths ["src/java"]
 
   :profiles {:dev {:dependencies [[puppetlabs/kitchensink ~ks-version :classifier "test" :exclusions [clj-time]]
-                                  [puppetlabs/trapperkeeper ~tk-version :classifier "test"]]}}
+                                  [puppetlabs/trapperkeeper ~tk-version :classifier "test"]]}
+             :testutils {:source-paths ^:replace ["test"]}}
 
   :deploy-repositories [["releases" {:url "https://clojars.org/repo"
                                      :username :env/clojars_jenkins_username

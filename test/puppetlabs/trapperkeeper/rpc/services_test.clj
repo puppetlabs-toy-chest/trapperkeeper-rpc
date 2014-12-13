@@ -1,17 +1,19 @@
 (ns puppetlabs.trapperkeeper.rpc.services-test
   (:require [clojure.test :refer :all]
             [puppetlabs.trapperkeeper.testutils.bootstrap :refer [with-app-with-config]]
+            [puppetlabs.trapperkeeper.app :refer [get-service]]
             [puppetlabs.http.client.sync :as http]
             [puppetlabs.trapperkeeper.services.webserver.jetty9-service :refer [jetty9-service]]
-            [puppetlabs.trapperkeeper.rpc.dummy-services.concrete :refer :all]
-            [puppetlabs.trapperkeeper.rpc.dummy-services.proxied :refer :all]
+            [puppetlabs.trapperkeeper.rpc.testutils.dummy-services :refer [add subtract]]
+            [puppetlabs.trapperkeeper.rpc.testutils.dummy-services.concrete :refer [rpc-test-service-concrete]]
+            [puppetlabs.trapperkeeper.rpc.testutils.dummy-services.proxied :refer [rpc-test-service-proxied]]
             [puppetlabs.trapperkeeper.rpc.services :refer [rpc-server-service]])
   (:import [puppetlabs.trapperkeeper.rpc RPCException RPCExecutionException]))
 
 
 (def config
   {:rpc {:RPCTestService
-         {:protocol-ns "puppetlabs.trapperkeeper.rpc.dummy-services.concrete"
+         {:protocol-ns "puppetlabs.trapperkeeper.rpc.testutils.dummy-services"
           :endpoint "http://localhost:9001/rpc/call"}}
    :webserver {:rpc {:host "0.0.0.0"
                      :port 9001}}})
@@ -57,4 +59,6 @@
         (testing "with the expected message")
         (testing "with a stacktrace")))
     (testing "and the remote function worked"
-      (testing "we get the expected result"))))
+      (let [result (add (get-service @client-app-atom :RPCTestService) 1 1)]
+        (testing "we get the expected result"
+          (is (= 2 result)))))))

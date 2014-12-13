@@ -11,7 +11,6 @@
 ;; * serialization abstraction / custom encoders
 ;; * cert authentication
 
-
 (defn- format-stacktrace [body]
   (if-let [stacktrace (:stacktrace body)]
     (format "Remote stacktrace:\n%s" stacktrace)
@@ -44,6 +43,8 @@
                                         :headers {"Content-Type" "application/json;charset=utf-8"}})]
 
       (when (not= 200 (:status response))
+        ;; TODO use RPCConnectionException, here, and RPCException for
+        ;; everything else.
         (throw (RPCException. (format "RPC service did not return 200. Returned %s instead.\nReceived body\n: %s"
                                       (:status response)
                                       (:body response)))))

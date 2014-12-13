@@ -1,4 +1,4 @@
-(ns puppetlabs.trapperkeeper.rpc.dummy-services)
+(ns puppetlabs.trapperkeeper.rpc.testutils.dummy-services)
 
 (defprotocol RPCTestService
   (add [this x y])
