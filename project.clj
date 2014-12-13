@@ -1,17 +1,28 @@
-(def tk-version "0.5.1")
+(def ks-version "1.0.0")
+(def tk-version "1.0.1")
 
 (defproject puppetlabs/trapperkeeper-rpc "0.1.0-SNAPSHOT"
   :description "RPC server/client library for Trapperkeeper services"
   :url "https://github.com/puppetlabs/trapperkeeper-rpc"
   :pedantic? :abort
-  :dependencies [[puppetlabs/trapperkeeper ~tk-version]
-                 [puppetlabs/trapperkeeper-webserver-jetty9 "0.9.0"]]
+  :dependencies [[org.clojure/clojure "1.6.0"]
+                 [puppetlabs/trapperkeeper ~tk-version]
+                 [puppetlabs/trapperkeeper-webserver-jetty9 "0.9.0"]
+                 [compojure "1.2.0" :exclusions [org.clojure/tools.macro
+                                                 clj-time/clj-time
+                                                 commons-io]]
+                 [puppetlabs/http-client "0.4.0"
+                  :exclusions [commons-codec puppetlabs/certificate-authority]]
+                 [clj-stacktrace "0.2.7"]]
 
   :lein-release {:scm         :git
                  :deploy-via  :lein-deploy}
 
   :source-paths ["src/clj"]
   :java-source-paths ["src/java"]
+
+  :profiles {:dev {:dependencies [[puppetlabs/kitchensink ~ks-version :classifier "test" :exclusions [clj-time]]
+                                  [puppetlabs/trapperkeeper ~tk-version :classifier "test"]]}}
 
   :deploy-repositories [["releases" {:url "https://clojars.org/repo"
                                      :username :env/clojars_jenkins_username

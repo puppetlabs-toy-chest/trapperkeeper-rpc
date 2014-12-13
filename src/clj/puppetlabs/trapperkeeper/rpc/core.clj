@@ -20,7 +20,7 @@
 (defn- handle-rpc-error! [body]
   (let [stacktrace (format-stacktrace body)
         msg (format "%s%s" (:msg body) stacktrace)]
-    (throw (RPCExcecutionException. msg))))
+    (throw (RPCExecutionException. msg))))
 
 (defn extract-body [r]
   (let [body (:body r)]
@@ -66,7 +66,7 @@
                  :svc-id svc-id
                  :fn-name fn-name})))
     (throw+ {:type ::bad-cfg
-             :msg (format "Could not find the :protocol-ns for service %s in settings." % svc-id)})))
+             :msg (format "Could not find the :protocol-ns for service %s in settings." svc-id)})))
 
 (defn- wrapped-get-service [get-service svc-id]
   (try

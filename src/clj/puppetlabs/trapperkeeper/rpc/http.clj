@@ -1,5 +1,5 @@
 (ns puppetlabs.trapperkeeper.rpc.http
-  (:require [puppetlabs.trapperkeeper.rpc.core :refer [extract-body call-local-svc-function]]
+  (:require [puppetlabs.trapperkeeper.rpc.core :refer [extract-body call-local-svc-fn]]
             [slingshot.slingshot :refer [try+]]
             [cheshire.core :as json]
             [clj-stacktrace.repl :refer [pst-str]]
@@ -19,7 +19,7 @@
          (let [{:keys [svc-id fn-name args]} (extract-body r)]
            (try+
 
-            (->> (call-local-svc-function settings get-service svc-id fn-name args)
+            (->> (call-local-svc-fn settings get-service svc-id fn-name args)
                  (hash-map :result)
                  build-response)
 
@@ -37,5 +37,5 @@
 
             (catch Throwable e
               (build-response {:error :exception
-                               :msg "The function %s/%s threw an exception: %s" svc-id fn-name (.toString e)
+                               :msg (format "The function %s/%s threw an exception: %s" svc-id fn-name (.toString e))
                                :stacktrace (pst-str e)})))))))

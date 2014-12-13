@@ -1,7 +1,6 @@
 (ns puppetlabs.trapperkeeper.rpc.services
   "TODO"
-  (:require [puppetlabs.trapperkeeper.core :refer [defservice]]
-            [puppetlabs.trapperkeeper.rpc.core :refer [extract-body lookup-fn  call-svc-function]]
+  (:require [puppetlabs.trapperkeeper.services :refer [defservice get-service]]
             [puppetlabs.trapperkeeper.rpc.http :refer [rpc-route]]
 
             [compojure.core :as c]

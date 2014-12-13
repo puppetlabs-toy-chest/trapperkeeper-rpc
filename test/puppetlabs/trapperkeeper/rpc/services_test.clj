@@ -1,20 +1,26 @@
 (ns puppetlabs.trapperkeeper.rpc.services-test
-  (:require [clojure.test :refer all]
+  (:require [clojure.test :refer :all]
             [puppetlabs.trapperkeeper.testutils.bootstrap :refer [with-app-with-config]]
             [puppetlabs.http.client.sync :as http]
             [puppetlabs.trapperkeeper.services.webserver.jetty9-service :refer [jetty9-service]]
             [puppetlabs.trapperkeeper.rpc.dummy-services.concrete :refer :all]
             [puppetlabs.trapperkeeper.rpc.dummy-services.proxied :refer :all]
-            [puppetlabs.trapperkeeper.rpc.core :refer [call-remote-svc-fn]]
-            [puppetlabs.trapperkeeper.rpc.services :refer rpc-server-service])
+            [puppetlabs.trapperkeeper.rpc.services :refer [rpc-server-service]])
   (:import [puppetlabs.trapperkeeper.rpc RPCException RPCExecutionException]))
 
 
 (def config
   {:rpc {:RPCTestService
          {:protocol-ns "puppetlabs.trapperkeeper.rpc.dummy-services.concrete"
-          :endpoint "http://localhost:9001/rpc/call"}}})
+          :endpoint "http://localhost:9001/rpc/call"}}
+   :webserver {:rpc {:host "0.0.0.0"
+                     :port 9001}}})
 
+;ssl-host: 0.0.0.0
+;ssl-port: 4431
+;ssl-key: "./dev-resources/ssl/key.pem"
+;ssl-cert: "./dev-resources/ssl/cert.pem"
+;ssl-ca-cert: "./dev-resources/ssl/ca.pem"
 (def client-app-atom (atom nil))
 
 (use-fixtures :once

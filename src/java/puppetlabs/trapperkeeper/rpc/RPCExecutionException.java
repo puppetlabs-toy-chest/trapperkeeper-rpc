@@ -1,3 +1,8 @@
 package puppetlabs.trapperkeeper.rpc;
 
-public class RPCExcecutionException extends Exceptions {}
+public class RPCExecutionException extends Exception {
+
+    public RPCExecutionException(String msg) {
+        super(msg);
+    }
+}

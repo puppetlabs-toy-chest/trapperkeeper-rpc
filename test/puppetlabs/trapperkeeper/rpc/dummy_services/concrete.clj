@@ -1,5 +1,6 @@
 (ns puppetlabs.trapperkeeper.rpc.dummy-services.concrete
-  (:require [puppetlabs.trapperkeeper.rpc :refer [RPCTestService]]
+  (:require [puppetlabs.trapperkeeper.rpc.dummy-services :refer [RPCTestService]]
+            [puppetlabs.trapperkeeper.rpc.core :refer [call-remote-svc-fn]]
             [puppetlabs.trapperkeeper.services :refer [defservice]]))
 
 
