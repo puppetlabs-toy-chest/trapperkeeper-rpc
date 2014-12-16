@@ -35,7 +35,7 @@
               (build-response {:error :bad-cfg
                                :msg msg}))
 
-            (catch Throwable e
+            (catch Exception e
               (build-response {:error :exception
                                :msg (format "The function %s/%s threw an exception: %s" svc-id fn-name (.toString e))
                                :stacktrace (pst-str e)})))))))

@@ -7,9 +7,10 @@
   (:import [puppetlabs.trapperkeeper.rpc RPCException RPCConnectionException]))
 
 ;; TODO
-;; * schema
-;; * serialization abstraction / custom encoders
+;; * tests
 ;; * cert authentication
+;; * serialization abstraction / custom encoders
+;; * schema
 
 (defn- format-stacktrace [body]
   (if-let [stacktrace (:stacktrace body)]
@@ -35,37 +36,55 @@
                  :args args}
         endpoint (get-in rpc-settings [svc-id :endpoint])]
 
+    (when (nil? (rpc-settings svc-id))
+      (throw (RPCException. (format "No entry for service %s in settings." svc-id))))
+
     (when (nil? endpoint)
       (throw (RPCException. (format "Could not find rpc endpoint for service %s in settings." svc-id))))
 
     ;; TODO cert
-    (let [response (http/post endpoint {:body (json/encode payload)
-                                        :headers {"Content-Type" "application/json;charset=utf-8"}})]
+    ;; TODO handle cannot connect
+    (try
+      (let [response (http/post endpoint {:body (json/encode payload)
+                                          :headers {"Content-Type" "application/json;charset=utf-8"}})]
 
-      (when (not= 200 (:status response))
-        ;; TODO use RPCConnectionException, here, and RPCException for
-        ;; everything else.
-        (throw (RPCException. (format "RPC service did not return 200. Returned %s instead.\nReceived body\n: %s"
-                                      (:status response)
-                                      (:body response)))))
 
-      (let [body (extract-body response)]
 
-        (when (some? (:error body))
-          (handle-rpc-error! body))
+        (when (not= 200 (:status response))
+          ;; TODO use RPCConnectionException, here, and RPCException for
+          ;; everything else.
+          (throw (RPCConnectionException. (format "RPC service did not return 200. Returned %s instead.\nReceived body: %s"
+                                                  (:status response)
+                                                  (:body response)))))
 
-        (:result body)))))
+        (let [body (extract-body response)]
+
+          (when (some? (:error body))
+            (handle-rpc-error! body))
+
+          (:result body)))
+      (catch java.net.ConnectException _
+        (throw (RPCConnectionException. (format "RPC server is unreachable at endpoint %s" endpoint)))))))
 
 (defn- lookup-fn [rpc-settings svc-id fn-name]
+  (when (nil? (rpc-settings svc-id))
+    (throw+ {:type ::no-such-svc
+             :svc-id svc-id}))
+
   (if-let [protocol-ns (get-in rpc-settings [svc-id :protocol-ns])]
-    (try
-      (-> (symbol protocol-ns fn-name)
-          find-var
-          var-get)
-      (catch IllegalArgumentException _
-        (throw+ {:type ::no-such-fn
-                 :svc-id svc-id
-                 :fn-name fn-name})))
+    (let [no-such-fn-exception {:type ::no-such-fn
+                                :svc-id svc-id
+                                :fn-name fn-name}]
+      (try
+        ;; TODO try to enforce respect for private functions
+        (-> (symbol protocol-ns fn-name)
+            find-var
+            var-get)
+        (catch IllegalArgumentException _
+          (throw+ no-such-fn-exception))
+        (catch NullPointerException _
+          (throw+ no-such-fn-exception))))
+
     (throw+ {:type ::bad-cfg
              :msg (format "Could not find the :protocol-ns for service %s in settings." svc-id)})))
 

@@ -7,4 +7,4 @@
   RPCTestService
   [[:ConfigService get-in-config]]
   (add [this x y] (call-remote-svc-fn (get-in-config [:rpc]) :RPCTestService :add x y))
-  (subtract [this x y] (call-remote-svc-fn (get-in-config [:rpc]) :RPCTestService :subtract x y)))
+  (fun-divide [this x] (call-remote-svc-fn (get-in-config [:rpc]) :RPCTestService :fun-divide x)))

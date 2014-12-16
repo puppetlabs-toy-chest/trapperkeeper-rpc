@@ -8,4 +8,4 @@
   RPCTestService
   []
   (add [this x y] (+ x y))
-  (subtract [this x y] (- x y)))
+  (fun-divide [this x] (/ x 0)))
