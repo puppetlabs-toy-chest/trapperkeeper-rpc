@@ -14,9 +14,10 @@
 
 
 (def config
-  {:rpc {:RPCTestService
-         {:protocol-ns "puppetlabs.trapperkeeper.rpc.testutils.dummy-services"
-          :endpoint "http://localhost:9001/rpc/call"}}
+  {:rpc {:services
+         {:RPCTestService
+          {:protocol-ns "puppetlabs.trapperkeeper.rpc.testutils.dummy-services"
+           :endpoint "http://localhost:9001/rpc/call"}}}
 
    :webserver {:rpc {:host "0.0.0.0"
                      :port 9001}}})
@@ -86,7 +87,7 @@
                     (is (re-find #"oh no" (.toString e)))))))))
 
         (testing "and the RPC server is unreachable"
-          (let [bad-settings (assoc-in rpc-settings [:RPCTestService :endpoint] "http://localhost:6666")]
+          (let [bad-settings (assoc-in rpc-settings [:services :RPCTestService :endpoint] "http://localhost:6666")]
             (testing "we see the expected exception"
               (is (thrown-with-msg? RPCConnectionException
                                     #"RPC server is unreachable at endpoint http://localhost:6666"
@@ -96,7 +97,7 @@
   (let [;ssl-context (ssl/pems->ssl-context "dev-resources/ssl/cert.pem"
         ;                                   "dev-resources/ssl/key.pem"
         ;                                   "dev-resources/ssl/ca.pem")
-        ssl-config (assoc-in config [:rpc :RPCTestService :endpoint] "https://localhost:9002/rpc/call")]
+        ssl-config (assoc-in config [:rpc :services :RPCTestService :endpoint] "https://localhost:9002/rpc/call")]
     ;; TODO FOR TOMORROW
     ;; * get server certs in place
     ;; * get client certs in place
@@ -106,12 +107,12 @@
       (testing "and there is no whitelist for that service"
         (testing "the call is successful"))
       (testing "and there is a whitelist for that service"
-        (let [whitelisted-config (assoc-in ssl-config [:rpc :RPCTestService :certificate-whitelist] "dev-resources/ssl/certs.txt")]
+        (let [whitelisted-config (assoc-in ssl-config [:rpc :services :RPCTestService :certificate-whitelist] "dev-resources/ssl/certs.txt")]
           (testing "and the request is signed"
             (testing "with a whitelisted cert"
               (testing "the call is successful"))
             (testing "with a non-whitelisted cert"
-              (let [dne-whitelisted-config (assoc-in whitelisted-config [:rpc :RPCTestService :certificate-whitelist] "dev-resources/ssl/dne-certs.txt")]
+              (let [dne-whitelisted-config (assoc-in whitelisted-config [:rpc :services :RPCTestService :certificate-whitelist] "dev-resources/ssl/dne-certs.txt")]
                 (testing "the call throws an RPCAuthenticationException"))))
           (testing "and the request is not signed"
             (testing "the call throws an RPCAuthenticationException")))))))

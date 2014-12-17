@@ -31,9 +31,9 @@
   If no cert whitelist is provided for a service, it is unprotected
   (the function always returns true)."
   [rpc-settings]
-  (->> (keys rpc-settings)
+  (->> (keys (:services rpc-settings))
        (mapv (fn [svc-id]
-               (if-let [cert-whitelist-path (get-in rpc-settings [svc-id :certificate-whitelist])]
+               (if-let [cert-whitelist-path (get-in rpc-settings [:services svc-id :certificate-whitelist])]
                  [svc-id (cn-whitelist->authorizer cert-whitelist-path)]
                  [svc-id (constantly true)])))
        (into {})))
@@ -61,7 +61,7 @@
   [rpc-settings svc-id endpoint payload]
   (let [basic-opts {:body (json/encode payload)
                     :headers {"Content-Type" "application/json;charset=utf-8"}}
-        opts (if (true? (get-in rpc-settings [svc-id :use-ssl]))
+        opts (if (true? (get-in rpc-settings [:services svc-id :use-ssl]))
                (assoc basic-opts :ssl-context (settings->ssl-context rpc-settings))
                basic-opts)]
     (http/post endpoint opts)))
@@ -70,9 +70,9 @@
   (let [payload {:svc-id svc-id
                  :fn-name fn-name
                  :args args}
-        endpoint (get-in rpc-settings [svc-id :endpoint])]
+        endpoint (get-in rpc-settings [:services svc-id :endpoint])]
 
-    (when (nil? (rpc-settings svc-id))
+    (when (nil? (get-in rpc-settings [:services svc-id]))
       (throw (RPCException. (format "No entry for service %s in settings." svc-id))))
 
     (when (nil? endpoint)
@@ -97,11 +97,11 @@
         (throw (RPCConnectionException. (format "RPC server is unreachable at endpoint %s" endpoint)))))))
 
 (defn- lookup-fn [rpc-settings svc-id fn-name]
-  (when (nil? (rpc-settings svc-id))
+  (when (nil? (get-in rpc-settings [:services svc-id]))
     (throw+ {:type ::no-such-svc
              :svc-id svc-id}))
 
-  (if-let [protocol-ns (get-in rpc-settings [svc-id :protocol-ns])]
+  (if-let [protocol-ns (get-in rpc-settings [:services svc-id :protocol-ns])]
     (let [no-such-fn-exception {:type ::no-such-fn
                                 :svc-id svc-id
                                 :fn-name fn-name}]
