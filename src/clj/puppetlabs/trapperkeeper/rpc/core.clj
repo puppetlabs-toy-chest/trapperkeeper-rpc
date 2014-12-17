@@ -1,16 +1,16 @@
 (ns puppetlabs.trapperkeeper.rpc.core
   "TODO"
   (:require [clojure.java.io :as io]
+            [puppetlabs.kitchensink.core :refer [cn-whitelist->authorizer]]
             [puppetlabs.http.client.sync :as http]
             [slingshot.slingshot :refer [throw+]]
             [cheshire.core :as json])
-  (:import [puppetlabs.trapperkeeper.rpc RPCException RPCConnectionException]))
+  (:import [puppetlabs.trapperkeeper.rpc RPCException RPCConnectionException RPCAuthenticationException]))
 
 ;; TODO
-;; * tests
-;; * cert authentication
 ;; * serialization abstraction / custom encoders
 ;; * schema
+
 
 (defn- format-stacktrace [body]
   (if-let [stacktrace (:stacktrace body)]
@@ -22,13 +22,30 @@
         msg (format "%s\n%s\n" (:msg body) stacktrace)]
     (throw (RPCException. msg))))
 
-(defn extract-body [r]
+(defn settings->authorizers
+  "Given a map of rpc settings, produces a map of service id ->
+  function. Each function takes a request and returns true or false
+  based on whether that request passes the service's cert whitelist.
+
+  If no cert whitelist is provided for a service, it is unprotected
+  (the function always returns true)."
+  [rpc-settings]
+  (->> (keys rpc-settings)
+       (mapv (fn [svc-id]
+               (if-let [cert-whitelist-path (get-in rpc-settings [svc-id :certificate-whitelist])]
+                 [svc-id (cn-whitelist->authorizer cert-whitelist-path)]
+                 [svc-id (constantly true)])))
+       (into {})))
+
+(defn body->string [r]
   (let [body (:body r)]
-    (json/decode
-     (condp instance? body
-       java.lang.String body
-       (slurp (io/reader body)))
-     true)))
+    (condp instance? body
+      java.lang.String body
+      (slurp (io/reader body)))))
+
+(defn extract-body [r]
+  (json/decode (body->string r) true))
+
 
 (defn call-remote-svc-fn [rpc-settings svc-id fn-name & args]
   (let [payload {:svc-id svc-id
@@ -42,27 +59,22 @@
     (when (nil? endpoint)
       (throw (RPCException. (format "Could not find rpc endpoint for service %s in settings." svc-id))))
 
-    ;; TODO cert
-    ;; TODO handle cannot connect
     (try
       (let [response (http/post endpoint {:body (json/encode payload)
                                           :headers {"Content-Type" "application/json;charset=utf-8"}})]
 
+        (condp = (:status response)
+          401 (throw (RPCAuthenticationException. "Permission denied to call functions from this service. Either request was not signed or was signed with a certificate not in the service's certificate whitelist."))
+          200 (let [body (extract-body response)]
 
+                (when (some? (:error body))
+                  (handle-rpc-error! body))
 
-        (when (not= 200 (:status response))
-          ;; TODO use RPCConnectionException, here, and RPCException for
-          ;; everything else.
+                (:result body))
           (throw (RPCConnectionException. (format "RPC service did not return 200. Returned %s instead.\nReceived body: %s"
                                                   (:status response)
-                                                  (:body response)))))
+                                                  (body->string response))))))
 
-        (let [body (extract-body response)]
-
-          (when (some? (:error body))
-            (handle-rpc-error! body))
-
-          (:result body)))
       (catch java.net.ConnectException _
         (throw (RPCConnectionException. (format "RPC server is unreachable at endpoint %s" endpoint)))))))
 

@@ -66,7 +66,7 @@
                 (is (instance? RPCException e))
 
                 (testing "with the expected message"
-                  (is (re-find #"(?m)The function RPCTestService/fun-divide threw.*ArithmeticException.*Divide by zero"
+                  (is (re-find #"(?m)The function :RPCTestService/fun-divide threw.*ArithmeticException.*Divide by zero"
                                   (.toString e))))
                 (testing "with a stacktrace"
                   (is (re-find #"Numbers.java" (.toString e))))))))
