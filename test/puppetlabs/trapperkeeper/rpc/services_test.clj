@@ -2,6 +2,7 @@
   (:require [clojure.test :refer :all]
             [puppetlabs.trapperkeeper.testutils.bootstrap :refer [with-app-with-config]]
             [puppetlabs.trapperkeeper.app :refer [get-service]]
+            [puppetlabs.certificate-authority.core :as ssl]
             [puppetlabs.http.client.sync :as http]
             [puppetlabs.trapperkeeper.services.webserver.jetty9-service :refer [jetty9-service]]
             [puppetlabs.trapperkeeper.rpc.services :refer [rpc-server-service]]
@@ -16,14 +17,15 @@
   {:rpc {:RPCTestService
          {:protocol-ns "puppetlabs.trapperkeeper.rpc.testutils.dummy-services"
           :endpoint "http://localhost:9001/rpc/call"}}
+
    :webserver {:rpc {:host "0.0.0.0"
                      :port 9001}}})
 
-;ssl-host: 0.0.0.0
-;ssl-port: 4431
-;ssl-key: "./dev-resources/ssl/key.pem"
-;ssl-cert: "./dev-resources/ssl/cert.pem"
-;ssl-ca-cert: "./dev-resources/ssl/ca.pem"
+(def ssl-server-settings {:ssl-host "0.0.0.0"
+                          :ssl-port 9002
+                          :ssl-key "./dev-resources/ssl/key.pem"
+                          :ssl-cert "./dev-resources/ssl/cert.pem"
+                          :ssl-ca-cert "./dev-resources/ssl/ca.pem"})
 
 (deftest end-to-end
   (testing "When invoking functions via RPC"
@@ -89,3 +91,27 @@
               (is (thrown-with-msg? RPCConnectionException
                                     #"RPC server is unreachable at endpoint http://localhost:6666"
                                     (call-remote-svc-fn bad-settings :RPCTestService :add 1 2))))))))))
+
+(deftest certificate-whitelist
+  (let [;ssl-context (ssl/pems->ssl-context "dev-resources/ssl/cert.pem"
+        ;                                   "dev-resources/ssl/key.pem"
+        ;                                   "dev-resources/ssl/ca.pem")
+        ssl-config (assoc-in config [:rpc :RPCTestService :endpoint] "https://localhost:9002/rpc/call")]
+    ;; TODO FOR TOMORROW
+    ;; * get server certs in place
+    ;; * get client certs in place
+    ;; * actually write code for conditionally using certs from client
+    ;; * test all of that
+    (testing "When remotely calling a service function"
+      (testing "and there is no whitelist for that service"
+        (testing "the call is successful"))
+      (testing "and there is a whitelist for that service"
+        (let [whitelisted-config (assoc-in ssl-config [:rpc :RPCTestService :certificate-whitelist] "dev-resources/ssl/certs.txt")]
+          (testing "and the request is signed"
+            (testing "with a whitelisted cert"
+              (testing "the call is successful"))
+            (testing "with a non-whitelisted cert"
+              (let [dne-whitelisted-config (assoc-in whitelisted-config [:rpc :RPCTestService :certificate-whitelist] "dev-resources/ssl/dne-certs.txt")]
+                (testing "the call throws an RPCAuthenticationException"))))
+          (testing "and the request is not signed"
+            (testing "the call throws an RPCAuthenticationException")))))))

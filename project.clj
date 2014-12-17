@@ -8,6 +8,7 @@
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [puppetlabs/trapperkeeper ~tk-version]
                  [puppetlabs/trapperkeeper-webserver-jetty9 "0.9.0"]
+                 [puppetlabs/certificate-authority "0.6.0" :exclusions [clj-time]]
                  [compojure "1.2.0" :exclusions [org.clojure/tools.macro
                                                  clj-time/clj-time
                                                  commons-io]]

@@ -1,6 +1,7 @@
 (ns puppetlabs.trapperkeeper.rpc.core
   "TODO"
   (:require [clojure.java.io :as io]
+            [puppetlabs.certificate-authority.core :as ssl]
             [puppetlabs.kitchensink.core :refer [cn-whitelist->authorizer]]
             [puppetlabs.http.client.sync :as http]
             [slingshot.slingshot :refer [throw+]]
@@ -46,6 +47,24 @@
 (defn extract-body [r]
   (json/decode (body->string r) true))
 
+(defn settings->ssl-context
+  "Given the RPC settings, produce an ssl-context using
+  pems->ssl-context."
+  [rpc-settings]
+  ; TODO
+  {})
+
+(defn post
+  "Given rpc settings, a service id, an endpoint, and a payload, makes
+  either an http or https request based on the presence of a cert
+  whitelist."
+  [rpc-settings svc-id endpoint payload]
+  (let [basic-opts {:body (json/encode payload)
+                    :headers {"Content-Type" "application/json;charset=utf-8"}}
+        opts (if (true? (get-in rpc-settings [svc-id :use-ssl]))
+               (assoc basic-opts :ssl-context (settings->ssl-context rpc-settings))
+               basic-opts)]
+    (http/post endpoint opts)))
 
 (defn call-remote-svc-fn [rpc-settings svc-id fn-name & args]
   (let [payload {:svc-id svc-id
@@ -60,8 +79,7 @@
       (throw (RPCException. (format "Could not find rpc endpoint for service %s in settings." svc-id))))
 
     (try
-      (let [response (http/post endpoint {:body (json/encode payload)
-                                          :headers {"Content-Type" "application/json;charset=utf-8"}})]
+      (let [response (post rpc-settings svc-id endpoint payload)]
 
         (condp = (:status response)
           401 (throw (RPCAuthenticationException. "Permission denied to call functions from this service. Either request was not signed or was signed with a certificate not in the service's certificate whitelist."))
