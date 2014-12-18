@@ -31,12 +31,19 @@
   If no cert whitelist is provided for a service, it is unprotected
   (the function always returns true)."
   [rpc-settings]
-  (->> (keys (:services rpc-settings))
-       (mapv (fn [svc-id]
-               (if-let [cert-whitelist-path (get-in rpc-settings [:services svc-id :certificate-whitelist])]
-                 [svc-id (cn-whitelist->authorizer cert-whitelist-path)]
-                 [svc-id (constantly true)])))
-       (into {})))
+  (let [mk-authorizer (fn [cert-whitelist-path]
+                        (let [authorizer (cn-whitelist->authorizer cert-whitelist-path)]
+                          (fn [req]
+                            (if (= :http (:scheme req))
+                              false
+                              (authorizer req)))))]
+
+    (->> (keys (:services rpc-settings))
+         (mapv (fn [svc-id]
+                 (if-let [cert-whitelist-path (get-in rpc-settings [:services svc-id :certificate-whitelist])]
+                   [svc-id (mk-authorizer cert-whitelist-path)]
+                   [svc-id (constantly true)])))
+         (into {}))))
 
 (defn body->string [r]
   (let [body (:body r)]
@@ -51,8 +58,15 @@
   "Given the RPC settings, produce an ssl-context using
   pems->ssl-context."
   [rpc-settings]
-  ; TODO
-  {})
+  (let [ssl-settings (:ssl rpc-settings)]
+
+    (when-not (every? some? (vals (select-keys ssl-settings [:client-cert :client-key :client-ca])))
+      (throw (RPCException. "SSL desired but misconfigured. Ensure that :client-cert, :client-key, and :client-ca are all set.")))
+
+
+    (ssl/pems->ssl-context (:client-cert ssl-settings)
+                           (:client-key ssl-settings)
+                           (:client-ca ssl-settings))))
 
 (defn post
   "Given rpc settings, a service id, an endpoint, and a payload, makes
@@ -61,9 +75,10 @@
   [rpc-settings svc-id endpoint payload]
   (let [basic-opts {:body (json/encode payload)
                     :headers {"Content-Type" "application/json;charset=utf-8"}}
-        opts (if (true? (get-in rpc-settings [:services svc-id :use-ssl]))
+        opts (if (re-find #"^https" endpoint)
                (assoc basic-opts :ssl-context (settings->ssl-context rpc-settings))
                basic-opts)]
+
     (http/post endpoint opts)))
 
 (defn call-remote-svc-fn [rpc-settings svc-id fn-name & args]

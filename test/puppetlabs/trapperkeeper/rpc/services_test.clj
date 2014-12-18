@@ -10,7 +10,7 @@
             [puppetlabs.trapperkeeper.rpc.testutils.dummy-services :refer [add fun-divide]]
             [puppetlabs.trapperkeeper.rpc.testutils.dummy-services.concrete :refer [rpc-test-service-concrete]]
             [puppetlabs.trapperkeeper.rpc.testutils.dummy-services.proxied :refer [rpc-test-service-proxied]])
-  (:import [puppetlabs.trapperkeeper.rpc RPCException RPCConnectionException]))
+  (:import [puppetlabs.trapperkeeper.rpc RPCException RPCConnectionException RPCAuthenticationException]))
 
 
 (def config
@@ -28,6 +28,8 @@
                           :ssl-cert "./dev-resources/ssl/cert.pem"
                           :ssl-ca-cert "./dev-resources/ssl/ca.pem"})
 
+(def server-services [rpc-test-service-concrete rpc-server-service jetty9-service])
+
 (deftest end-to-end
   (testing "When invoking functions via RPC"
     (with-app-with-config client-app
@@ -35,7 +37,7 @@
       config
 
       (with-app-with-config server-app
-        [rpc-test-service-concrete rpc-server-service jetty9-service]
+        server-services
         config
 
         (testing "and the remote function worked"
@@ -48,7 +50,7 @@
   (testing "When invoking functions via RPC"
     (let [rpc-settings (:rpc config)]
       (with-app-with-config server-app
-        [rpc-test-service-concrete rpc-server-service jetty9-service]
+        server-services
         config
 
         (testing "and the specified service is not in the local config we see the expected exception"
@@ -94,25 +96,43 @@
                                     (call-remote-svc-fn bad-settings :RPCTestService :add 1 2))))))))))
 
 (deftest certificate-whitelist
-  (let [;ssl-context (ssl/pems->ssl-context "dev-resources/ssl/cert.pem"
-        ;                                   "dev-resources/ssl/key.pem"
-        ;                                   "dev-resources/ssl/ca.pem")
-        ssl-config (assoc-in config [:rpc :services :RPCTestService :endpoint] "https://localhost:9002/rpc/call")]
-    ;; TODO FOR TOMORROW
-    ;; * get server certs in place
-    ;; * get client certs in place
-    ;; * actually write code for conditionally using certs from client
-    ;; * test all of that
-    (testing "When remotely calling a service function"
-      (testing "and there is no whitelist for that service"
-        (testing "the call is successful"))
-      (testing "and there is a whitelist for that service"
-        (let [whitelisted-config (assoc-in ssl-config [:rpc :services :RPCTestService :certificate-whitelist] "dev-resources/ssl/certs.txt")]
-          (testing "and the request is signed"
-            (testing "with a whitelisted cert"
-              (testing "the call is successful"))
+  (let [ssl-config (-> config
+                       (assoc-in [:webserver :rpc] (merge (get-in config [:webserver :rpc]) ssl-server-settings))
+                       (assoc-in [:rpc :services :RPCTestService :endpoint] "https://localhost:9002/rpc/call")
+                       (assoc-in [:rpc :services :RPCTestService :certificate-whitelist] "dev-resources/ssl/certs.txt")
+                       (assoc-in [:rpc :ssl] {:client-cert "dev-resources/ssl/cert.pem"
+                                              :client-key "dev-resources/ssl/key.pem"
+                                              :client-ca "dev-resources/ssl/ca.pem"}))]
+
+    (testing "When remotely calling a service function and there is a whitelist for that service"
+
+      (testing "and the request is signed"
+
+        (testing "with a whitelisted cert"
+          (with-app-with-config app server-services ssl-config
+            (let [result (call-remote-svc-fn (:rpc ssl-config) :RPCTestService :add 1 2)]
+
+              (testing "the call is successful"
+                (is (= 3 result))))))
+
             (testing "with a non-whitelisted cert"
-              (let [dne-whitelisted-config (assoc-in whitelisted-config [:rpc :services :RPCTestService :certificate-whitelist] "dev-resources/ssl/dne-certs.txt")]
-                (testing "the call throws an RPCAuthenticationException"))))
+              (with-app-with-config app
+                server-services
+                (assoc-in ssl-config [:rpc :services :RPCTestService :certificate-whitelist] "dev-resources/ssl/dne-certs.txt" )
+                (testing "the call throws an RPCAuthenticationException"
+                  (is (thrown-with-msg? RPCAuthenticationException
+                                        ;; TODO
+                                        #"Permission denied"
+                                        (call-remote-svc-fn (:rpc ssl-config) :RPCTestService :add 1 2))))))
+
           (testing "and the request is not signed"
-            (testing "the call throws an RPCAuthenticationException")))))))
+            (let [whitelist-with-http-config (-> (assoc-in ssl-config [:rpc :services :RPCTestService :endpoint] "http://localhost:9001/rpc/call"))]
+                  (with-app-with-config app
+                    server-services
+                    whitelist-with-http-config
+
+                    (testing "the call throws an RPCAuthenticationException"
+                      (is (thrown-with-msg? RPCAuthenticationException
+                                            ;; TODO
+                                            #"Permission denied"
+                                            (call-remote-svc-fn (:rpc whitelist-with-http-config) :RPCTestService :add 1 2)))))))))))
