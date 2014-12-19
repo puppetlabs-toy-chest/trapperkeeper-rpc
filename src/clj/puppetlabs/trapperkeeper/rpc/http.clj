@@ -1,18 +1,12 @@
 (ns puppetlabs.trapperkeeper.rpc.http
-  (:require [puppetlabs.trapperkeeper.rpc.core :refer [extract-body call-local-svc-fn settings->authorizers]]
+  (:require [puppetlabs.trapperkeeper.rpc.core :refer [call-local-svc-fn settings->authorizers]]
+            [puppetlabs.trapperkeeper.rpc.wire :refer [build-response parse-request json-wire]]
             [puppetlabs.kitchensink.core :refer [cn-whitelist->authorizer]]
             [puppetlabs.certificate-authority.core :refer [get-cn-from-x500-principal]]
             [slingshot.slingshot :refer [try+]]
-            [cheshire.core :as json]
             [clj-stacktrace.repl :refer [pst-str]]
             [compojure.core :refer [routes POST]]
             [ring.util.response :refer [response header status]]))
-
-(defn build-response [data]
-  (-> data
-      json/encode
-      response
-      (header "content-type" "application/json;charset=utf-8")))
 
 ;; TODO copypasta'd here until ring-middleware gets a release.
 (defn cert->principal
@@ -39,13 +33,12 @@
   (let [authorizers (settings->authorizers settings)]
     (-> (routes
          (POST "/call" [:as r]
-               (let [{:keys [svc-id fn-name args]} (extract-body r)
-                     svc-id (keyword svc-id)
+               (let [{:keys [svc-id fn-name args]} (parse-request json-wire r)
+                     build-response (partial build-response json-wire)
                      whitelisted? (authorizers svc-id)]
 
                  (if-not (whitelisted? r)
-                   (-> (build-response {:error :permission-denied})
-                       (status 401))
+                   (build-response {:error :permission-denied})
                    (try+
 
                     (->> (call-local-svc-fn settings get-service svc-id fn-name args)

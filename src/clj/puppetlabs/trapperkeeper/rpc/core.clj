@@ -5,12 +5,12 @@
             [puppetlabs.kitchensink.core :refer [cn-whitelist->authorizer]]
             [puppetlabs.http.client.sync :as http]
             [slingshot.slingshot :refer [throw+]]
-            [cheshire.core :as json])
+            [puppetlabs.trapperkeeper.rpc.wire :refer [json-serializer decode encode]])
   (:import [puppetlabs.trapperkeeper.rpc RPCException RPCConnectionException RPCAuthenticationException]))
 
 ;; TODO
 ;; * serialization abstraction / custom encoders
-;; * schema
+;; * (schema)
 
 
 (defn- format-stacktrace [body]
@@ -19,9 +19,11 @@
     ""))
 
 (defn- handle-rpc-error! [body]
-  (let [stacktrace (format-stacktrace body)
-        msg (format "%s\n%s\n" (:msg body) stacktrace)]
-    (throw (RPCException. msg))))
+  (if (= "permission-denied" (:error body))
+    (throw (RPCAuthenticationException. "Permission denied to call functions from this service. Either request was not signed or was signed with a certificate not in the service's certificate whitelist."))
+    (let [stacktrace (format-stacktrace body)
+          msg (format "%s\n%s\n" (:msg body) stacktrace)]
+      (throw (RPCException. msg)))))
 
 (defn settings->authorizers
   "Given a map of rpc settings, produces a map of service id ->
@@ -51,9 +53,6 @@
       java.lang.String body
       (slurp (io/reader body)))))
 
-(defn extract-body [r]
-  (json/decode (body->string r) true))
-
 (defn settings->ssl-context
   "Given the RPC settings, produce an ssl-context using
   pems->ssl-context."
@@ -73,7 +72,7 @@
   either an http or https request based on the presence of a cert
   whitelist."
   [rpc-settings svc-id endpoint payload]
-  (let [basic-opts {:body (json/encode payload)
+  (let [basic-opts {:body (encode json-serializer payload)
                     :headers {"Content-Type" "application/json;charset=utf-8"}}
         opts (if (re-find #"^https" endpoint)
                (assoc basic-opts :ssl-context (settings->ssl-context rpc-settings))
@@ -96,17 +95,17 @@
     (try
       (let [response (post rpc-settings svc-id endpoint payload)]
 
-        (condp = (:status response)
-          401 (throw (RPCAuthenticationException. "Permission denied to call functions from this service. Either request was not signed or was signed with a certificate not in the service's certificate whitelist."))
-          200 (let [body (extract-body response)]
-
-                (when (some? (:error body))
-                  (handle-rpc-error! body))
-
-                (:result body))
+        (when-not (= 200 (:status response))
           (throw (RPCConnectionException. (format "RPC service did not return 200. Returned %s instead.\nReceived body: %s"
                                                   (:status response)
-                                                  (body->string response))))))
+                                                  (body->string response)))))
+
+        (let [body (decode json-serializer (:body response))]
+
+          (when (some? (:error body))
+            (handle-rpc-error! body))
+
+          (:result body)))
 
       (catch java.net.ConnectException _
         (throw (RPCConnectionException. (format "RPC server is unreachable at endpoint %s" endpoint)))))))

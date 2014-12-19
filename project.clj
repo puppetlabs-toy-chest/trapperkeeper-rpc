@@ -9,6 +9,7 @@
                  [puppetlabs/trapperkeeper ~tk-version]
                  [puppetlabs/trapperkeeper-webserver-jetty9 "0.9.0"]
                  [puppetlabs/certificate-authority "0.6.0" :exclusions [clj-time]]
+                 [com.cognitect/transit-clj "0.8.259" :exclusions [com.fasterxml.jackson.core/jackson-core]]
                  [compojure "1.2.0" :exclusions [org.clojure/tools.macro
                                                  clj-time/clj-time
                                                  commons-io]]

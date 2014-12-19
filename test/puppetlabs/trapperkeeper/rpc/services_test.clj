@@ -121,7 +121,6 @@
                 (assoc-in ssl-config [:rpc :services :RPCTestService :certificate-whitelist] "dev-resources/ssl/dne-certs.txt" )
                 (testing "the call throws an RPCAuthenticationException"
                   (is (thrown-with-msg? RPCAuthenticationException
-                                        ;; TODO
                                         #"Permission denied"
                                         (call-remote-svc-fn (:rpc ssl-config) :RPCTestService :add 1 2))))))
 
@@ -133,6 +132,5 @@
 
                     (testing "the call throws an RPCAuthenticationException"
                       (is (thrown-with-msg? RPCAuthenticationException
-                                            ;; TODO
                                             #"Permission denied"
                                             (call-remote-svc-fn (:rpc whitelist-with-http-config) :RPCTestService :add 1 2)))))))))))
