@@ -11,8 +11,17 @@
 
 (def transit-serializer
   (reify RPCSerializer
-    (encode [this data] "HI")
-    (decode [this data] "HI")))
+
+    (encode [this data]
+      (let [out (ByteArrayOutputStream.) ;; grow as needed
+            writer (transit/writer out :json)]
+        (transit/write writer data)
+        out))
+
+    (decode [this data]
+      (let [in (ByteArrayInputStream. (.toByteArray data))
+            reader (transit/reader in :json)]
+        (transit/read reader)))))
 
 (def json-serializer
   (reify RPCSerializer
@@ -33,8 +42,14 @@
 
 (def transit-wire
   (reify RPCWire
-    (build-response [this data] "TODO")
-    (parse-request [this request] "TODO")))
+    (build-response [this data]
+      (-> (encode transit-serializer data)
+          response
+          (header "content-type" "application/octet-stream")))
+
+    (parse-request [this request]
+      (let [parsed (decode transit-serializer (:body request))]
+        (assoc parsed :svc-id (keyword (:svc-id parsed)))))))
 
 (def json-wire
   (reify RPCWire
