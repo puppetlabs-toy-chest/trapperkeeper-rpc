@@ -5,7 +5,7 @@
             [puppetlabs.kitchensink.core :refer [cn-whitelist->authorizer]]
             [puppetlabs.http.client.sync :as http]
             [slingshot.slingshot :refer [throw+]]
-            [puppetlabs.trapperkeeper.rpc.wire :refer [json-serializer decode encode]])
+            [puppetlabs.trapperkeeper.rpc.wire :refer [json-serializer transit-serializer decode encode]])
   (:import [puppetlabs.trapperkeeper.rpc RPCException RPCConnectionException RPCAuthenticationException]))
 
 ;; TODO
@@ -19,7 +19,7 @@
     ""))
 
 (defn- handle-rpc-error! [body]
-  (if (= "permission-denied" (:error body))
+  (if (= :permission-denied (keyword (:error body)))
     (throw (RPCAuthenticationException. "Permission denied to call functions from this service. Either request was not signed or was signed with a certificate not in the service's certificate whitelist."))
     (let [stacktrace (format-stacktrace body)
           msg (format "%s\n%s\n" (:msg body) stacktrace)]
@@ -72,7 +72,8 @@
   either an http or https request based on the presence of a cert
   whitelist."
   [rpc-settings svc-id endpoint payload]
-  (let [basic-opts {:body (encode json-serializer payload)
+  (let [encode (partial encode (condp = (:wire-format rpc-settings) :json json-serializer :transit transit-serializer :json))
+        basic-opts {:body (encode payload)
                     :headers {"Content-Type" "application/json;charset=utf-8"}}
         opts (if (re-find #"^https" endpoint)
                (assoc basic-opts :ssl-context (settings->ssl-context rpc-settings))
@@ -100,7 +101,8 @@
                                                   (:status response)
                                                   (body->string response)))))
 
-        (let [body (decode json-serializer (:body response))]
+        (let [decode (partial decode (condp = (:wire-format rpc-settings) :json json-serializer :transit transit-serializer :json))
+              body (decode (:body response))]
 
           (when (some? (:error body))
             (handle-rpc-error! body))

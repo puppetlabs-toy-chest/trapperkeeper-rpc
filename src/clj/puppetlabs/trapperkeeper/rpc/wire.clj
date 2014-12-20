@@ -16,10 +16,12 @@
       (let [out (ByteArrayOutputStream.) ;; grow as needed
             writer (transit/writer out :json)]
         (transit/write writer data)
-        out))
+        (ByteArrayInputStream. (.toByteArray out))))
 
     (decode [this data]
-      (let [in (ByteArrayInputStream. (.toByteArray data))
+      (let [in (ByteArrayInputStream. (if (instance? java.lang.String data)
+                                        (.getBytes data)
+                                        (.getBytes (slurp (io/reader data)))))
             reader (transit/reader in :json)]
         (transit/read reader)))))
 
@@ -49,7 +51,9 @@
 
     (parse-request [this request]
       (let [parsed (decode transit-serializer (:body request))]
-        (assoc parsed :svc-id (keyword (:svc-id parsed)))))))
+        (-> parsed
+            (assoc :svc-id (keyword (:svc-id parsed)))
+            (assoc :fn-name (name (:fn-name parsed))))))))
 
 (def json-wire
   (reify RPCWire

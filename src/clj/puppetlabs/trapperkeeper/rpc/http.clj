@@ -1,6 +1,6 @@
 (ns puppetlabs.trapperkeeper.rpc.http
   (:require [puppetlabs.trapperkeeper.rpc.core :refer [call-local-svc-fn settings->authorizers]]
-            [puppetlabs.trapperkeeper.rpc.wire :refer [build-response parse-request json-wire]]
+            [puppetlabs.trapperkeeper.rpc.wire :refer [build-response parse-request json-wire transit-wire]]
             [puppetlabs.kitchensink.core :refer [cn-whitelist->authorizer]]
             [puppetlabs.certificate-authority.core :refer [get-cn-from-x500-principal]]
             [slingshot.slingshot :refer [try+]]
@@ -33,8 +33,9 @@
   (let [authorizers (settings->authorizers settings)]
     (-> (routes
          (POST "/call" [:as r]
-               (let [{:keys [svc-id fn-name args]} (parse-request json-wire r)
-                     build-response (partial build-response json-wire)
+               (let [wire (condp = (:wire-format settings) :json json-wire :transit transit-wire json-wire)
+                     {:keys [svc-id fn-name args]} (parse-request wire r)
+                     build-response (partial build-response wire)
                      whitelisted? (authorizers svc-id)]
 
                  (if-not (whitelisted? r)
