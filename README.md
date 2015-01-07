@@ -13,7 +13,9 @@ services. It provides two things:
 
 ## Feature Overview
 
- * Choice of JSON or Transit+msgpack (the latter being the default) for serialization
+ * Uses [transit](https://github.com/cognitect/transit-clj) to do
+   (de)serialization. Choice of JSON or msgpack as the underlying wire
+   format (the latter being the default).
  * Optional Per-service certificate whitelisting
  * HTTP or HTTPS
  * Per-service endpoints
@@ -56,8 +58,8 @@ Planned features:
 Given the following config:
 
 ```clojure
-  {:rpc {;; currently supported: :transit (using msgpack) and :json
-         :wire-format :transit
+  {:rpc {;; currently supported: :msgpack and :json, both via transit
+         :wire-format :msgpack
 
          ;; settings for making signed requests to the rpc server
          :ssl {:client-cert "dev-resources/ssl/client-cert.pem"

@@ -1,6 +1,6 @@
 (ns puppetlabs.trapperkeeper.rpc.http
   (:require [puppetlabs.trapperkeeper.rpc.core :refer [call-local-svc-fn settings->authorizers]]
-            [puppetlabs.trapperkeeper.rpc.wire :refer [build-response parse-request json-wire transit-wire]]
+            [puppetlabs.trapperkeeper.rpc.wire :refer [build-response parse-request json-http-helper msgpack-http-helper]]
             [puppetlabs.kitchensink.core :refer [cn-whitelist->authorizer]]
             [puppetlabs.certificate-authority.core :refer [get-cn-from-x500-principal]]
             [slingshot.slingshot :refer [try+]]
@@ -13,6 +13,12 @@
   "Given an ssl cert, extract and return its X500Principal."
   [cert]
   (.getSubjectX500Principal cert))
+
+(defn- pick-http-helper [rpc-settings]
+  (condp = (:wire-format rpc-settings)
+    :msgpack msgpack-http-helper
+    :json json-http-helper
+    msgpack-http-helper))
 
 ;; TODO copypasta'd here until ring-middleware gets a release.
 (defn wrap-with-certificate-cn
@@ -29,20 +35,20 @@
 
       (handler req))))
 
-(defn rpc-route [settings get-service]
-  (let [authorizers (settings->authorizers settings)]
+(defn rpc-route [rpc-settings get-service]
+  (let [authorizers (settings->authorizers rpc-settings)]
     (-> (routes
          (POST "/call" [:as r]
-               (let [wire (condp = (:wire-format settings) :json json-wire :transit transit-wire json-wire)
-                     {:keys [svc-id fn-name args]} (parse-request wire r)
-                     build-response (partial build-response wire)
+               (let [http-helper (pick-http-helper rpc-settings)
+                     {:keys [svc-id fn-name args]} (parse-request http-helper r)
+                     build-response (partial build-response http-helper)
                      whitelisted? (authorizers svc-id)]
 
                  (if-not (whitelisted? r)
                    (build-response {:error :permission-denied})
                    (try+
 
-                    (->> (call-local-svc-fn settings get-service svc-id fn-name args)
+                    (->> (call-local-svc-fn rpc-settings get-service svc-id fn-name args)
                          (hash-map :result)
                          build-response)
 

@@ -1,67 +1,73 @@
 (ns puppetlabs.trapperkeeper.rpc.wire
   (:require [clojure.java.io :as io]
             [cognitect.transit :as transit]
-            [cheshire.core :as json]
             [ring.util.response :refer [response header]])
   (:import [java.io ByteArrayInputStream ByteArrayOutputStream]))
 
-(defprotocol RPCSerializer
+(defn input-stream-to-byte-array [stream]
+  (let [byte-vector (loop [s stream bv []]
+                      (let [next-byte (.read s)]
+                        (if (= -1 next-byte)
+                          bv
+                          (recur s (conj bv next-byte)))))]
+    (byte-array byte-vector)))
+
+(defprotocol RPCSerialization
   (encode [this data])
   (decode [this data]))
 
-(def transit-serializer
-  (reify RPCSerializer
-
-    (encode [this data]
-      (let [out (ByteArrayOutputStream.) ;; grow as needed
-            writer (transit/writer out :json)]
-        (transit/write writer data)
-        (ByteArrayInputStream. (.toByteArray out))))
-
-    (decode [this data]
-      (let [in (ByteArrayInputStream. (if (instance? java.lang.String data)
-                                        (.getBytes data)
-                                        (.getBytes (slurp (io/reader data)))))
-            reader (transit/reader in :json)]
-        (transit/read reader)))))
-
-(def json-serializer
-  (reify RPCSerializer
-
-    (encode [this data]
-      (json/encode data))
-
-    (decode [this data]
-      (let [data (if (instance? java.lang.String data)
-                   data
-                   (slurp (io/reader data)))]
-
-        (json/decode data true)))))
-
-(defprotocol RPCWire
+(defprotocol RPCHTTPHelper
   (build-response [this data])
   (parse-request [this request]))
 
-(def transit-wire
-  (reify RPCWire
-    (build-response [this data]
-      (-> (encode transit-serializer data)
-          response
-          (header "content-type" "application/octet-stream")))
+(defn do-encode [data & [wire-format]]
+  (let [wire-format (or wire-format :msgpack)]
+      (let [out (ByteArrayOutputStream.) ;; grow as needed
+            writer (transit/writer out wire-format)]
+        (transit/write writer data)
+        (ByteArrayInputStream. (.toByteArray out)))))
 
-    (parse-request [this request]
-      (let [parsed (decode transit-serializer (:body request))]
-        (-> parsed
-            (assoc :svc-id (keyword (:svc-id parsed)))
-            (assoc :fn-name (name (:fn-name parsed))))))))
+(defn do-decode [data & [wire-format]]
+  (let [wire-format (or wire-format :msgpack)
+        in (ByteArrayInputStream. (if (instance? java.lang.String data)
+                                    (.getBytes data)
+                                    (input-stream-to-byte-array data)))
+        reader (transit/reader in wire-format)]
+    (transit/read reader)))
 
-(def json-wire
-  (reify RPCWire
-    (build-response [this data]
-      (-> (encode json-serializer data)
+(def msgpack-serializer
+  (reify RPCSerialization
+    (encode [this data] (do-encode data :msgpack))
+    (decode [this data] (do-decode data :msgpack))))
+
+(def json-serializer
+  (reify RPCSerialization
+    (encode [this data] (do-encode data :json))
+    (decode [this data] (do-decode data :json))))
+
+(defn do-build-response [data & [wire-format]]
+  (let [wire-format (or wire-format :msgpack)]
+    (-> (do-encode data wire-format)
         response
-        (header "content-type" "application/json;charset=utf-8")))
+        (header "content-type" "application/octet-stream"))))
 
+(defn do-parse-request [request & [wire-format]]
+  (let [wire-format (or wire-format :msgpack)
+        parsed (do-decode (:body request) wire-format)]
+    (-> parsed
+        (assoc :svc-id (keyword (:svc-id parsed)))
+        (assoc :fn-name (name (:fn-name parsed))))))
+
+(def msgpack-http-helper
+  (reify RPCHTTPHelper
+    (build-response [this data]
+      (do-build-response data :msgpack))
     (parse-request [this request]
-      (let [parsed (decode json-serializer (:body request))]
-        (assoc parsed :svc-id (keyword (:svc-id parsed)))))))
+      (do-parse-request request :msgpack))))
+
+(def json-http-helper
+  (reify RPCHTTPHelper
+    (build-response [this data]
+      (do-build-response data :json))
+    (parse-request [this request]
+      (do-parse-request request :json))))

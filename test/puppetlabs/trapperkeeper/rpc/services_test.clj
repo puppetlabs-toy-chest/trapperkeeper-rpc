@@ -14,7 +14,7 @@
 
 
 (def config
-  {:rpc {:wire-format :transit
+  {:rpc {:wire-format :msgpack
          :services {:RPCTestService
                     {:protocol-ns "puppetlabs.trapperkeeper.rpc.testutils.dummy-services"
                      :endpoint "http://localhost:9001/rpc/call"}}}
@@ -31,7 +31,7 @@
 (def server-services [rpc-test-service-concrete rpc-server-service jetty9-service])
 
 (deftest end-to-end
-  (doseq [fmt [:transit :json]]
+  (doseq [fmt [:msgpack :json]]
     (testing "When invoking functions via RPC"
       (with-app-with-config client-app
         [rpc-test-service-proxied]
@@ -48,7 +48,7 @@
                 (is (= 2 result))))))))))
 
 (deftest error-handling
-  (doseq [fmt [:transit :json]]
+  (doseq [fmt [:msgpack :json]]
     (testing "When invoking functions via RPC"
       (let [config (assoc-in config [:rpc :wire-format] fmt)
             rpc-settings (:rpc config)]

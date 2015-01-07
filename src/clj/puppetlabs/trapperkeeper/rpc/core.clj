@@ -5,13 +5,8 @@
             [puppetlabs.kitchensink.core :refer [cn-whitelist->authorizer]]
             [puppetlabs.http.client.sync :as http]
             [slingshot.slingshot :refer [throw+]]
-            [puppetlabs.trapperkeeper.rpc.wire :refer [json-serializer transit-serializer decode encode]])
+            [puppetlabs.trapperkeeper.rpc.wire :refer [json-serializer msgpack-serializer decode encode]])
   (:import [puppetlabs.trapperkeeper.rpc RPCException RPCConnectionException RPCAuthenticationException]))
-
-;; TODO
-;; * serialization abstraction / custom encoders
-;; * (schema)
-
 
 (defn- format-stacktrace [body]
   (if-let [stacktrace (:stacktrace body)]
@@ -24,6 +19,12 @@
     (let [stacktrace (format-stacktrace body)
           msg (format "%s\n%s\n" (:msg body) stacktrace)]
       (throw (RPCException. msg)))))
+
+(defn- pick-serializer [rpc-settings]
+  (condp = (:wire-format rpc-settings)
+    :msgpack msgpack-serializer
+    :json json-serializer
+    msgpack-serializer))
 
 (defn settings->authorizers
   "Given a map of rpc settings, produces a map of service id ->
@@ -72,7 +73,7 @@
   either an http or https request based on the presence of a cert
   whitelist."
   [rpc-settings svc-id endpoint payload]
-  (let [encode (partial encode (condp = (:wire-format rpc-settings) :json json-serializer :transit transit-serializer :json))
+  (let [encode (partial encode (pick-serializer rpc-settings))
         basic-opts {:body (encode payload)
                     :headers {"Content-Type" "application/json;charset=utf-8"}}
         opts (if (re-find #"^https" endpoint)
@@ -101,7 +102,7 @@
                                                   (:status response)
                                                   (body->string response)))))
 
-        (let [decode (partial decode (condp = (:wire-format rpc-settings) :json json-serializer :transit transit-serializer :json))
+        (let [decode (partial decode (pick-serializer rpc-settings))
               body (decode (:body response))]
 
           (when (some? (:error body))
