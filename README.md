@@ -1,6 +1,6 @@
 # trapperkeeper-rpc
 
-(TODO clojars)
+(TODO clojars, travis, etc)
 
 This library enables transparent RPC implementation for TK
 services. It provides two things:
@@ -103,7 +103,18 @@ as if the service was defined locally.
 
 ## Error handling
 
-TODO
+There are three classes of exceptions thrown by this library during an
+RPC call. An **RPCConnectionException** is thrown when a given service's
+endpoint is unreachable or otherwise uncommunicative. An
+**RPCAuthenticationException** is thrown if the calling client's
+certificate is not on the whitelist for that service on the server
+side.
+
+Should the remotely called service function throw an exception, the
+stack trace from the remote server is returned as part of an
+**RPCException**. This exception is also used for cases of
+misconfiguration (ie trying to call a function that does not exist in
+the RPC server's TK stack).
 
 ## Running the tests
 
