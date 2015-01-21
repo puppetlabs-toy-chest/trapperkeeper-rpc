@@ -1,6 +1,6 @@
-# trapperkeeper-rpc
+[![Build Status](https://travis-ci.org/puppetlabs/trapperkeeper-rpc.png?branch=master)](https://travis-ci.org/puppetlabs/trapperkeeper-rpc)
 
-(TODO clojars, travis, etc)
+# trapperkeeper-rpc
 
 This library enables transparent RPC implementation for [TrapperKeeper](https://github.com/puppetlabs/trapperkeeper)
 services. It provides two things:
@@ -10,6 +10,8 @@ services. It provides two things:
  * An RPC server service
    (`puppetlabs.trapperkeeper.rpc.services.rpc-server-service`) that
    exposes proxied service implementations over HTTP.
+
+[![Clojars Project](http://clojars.org/puppetlabs/trapperkeeper-rpc/latest-version.svg)](http://clojars.org/puppetlabs/trapperkeeper-rpc)
 
 ## Feature Overview
 
