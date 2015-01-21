@@ -126,6 +126,10 @@ the RPC server's TK stack).
 
 Nathaniel Smith <nathaniel@puppetlabs.com>
 
+## Contributors
+
+ * Justin Holguin
+
 ## License
 
 Copyright © 2015 Puppet Labs
