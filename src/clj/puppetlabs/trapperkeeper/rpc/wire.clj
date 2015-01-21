@@ -2,14 +2,15 @@
   (:require [clojure.java.io :as io]
             [cognitect.transit :as transit]
             [ring.util.response :refer [response header]])
-  (:import [java.io ByteArrayInputStream ByteArrayOutputStream]))
+  (:import [java.io ByteArrayInputStream ByteArrayOutputStream InputStream]))
 
-(defn input-stream-to-byte-array [stream]
-  (let [byte-vector (loop [s stream bv []]
-                      (let [next-byte (.read s)]
+(defn input-stream-to-byte-array
+  [^InputStream stream]
+  (let [byte-vector (loop [bv []]
+                      (let [next-byte (.read stream)]
                         (if (= -1 next-byte)
                           bv
-                          (recur s (conj bv next-byte)))))]
+                          (recur (conj bv next-byte)))))]
     (byte-array byte-vector)))
 
 (defprotocol RPCSerialization
@@ -30,7 +31,7 @@
 (defn do-decode [data & [wire-format]]
   (let [wire-format (or wire-format :msgpack)
         in (ByteArrayInputStream. (if (instance? java.lang.String data)
-                                    (.getBytes data)
+                                    (.getBytes ^String data)
                                     (input-stream-to-byte-array data)))
         reader (transit/reader in wire-format)]
     (transit/read reader)))
