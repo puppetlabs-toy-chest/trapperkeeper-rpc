@@ -6,7 +6,7 @@
 
 (defn input-stream-to-byte-array
   [^InputStream stream]
-  (let [byte-vector (loop [bv []]
+  (let [byte-vector (loop [bv (vector-of :int)]
                       (let [next-byte (.read stream)]
                         (if (= -1 next-byte)
                           bv
