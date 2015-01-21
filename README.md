@@ -2,7 +2,7 @@
 
 (TODO clojars, travis, etc)
 
-This library enables transparent RPC implementation for TK
+This library enables transparent RPC implementation for [TrapperKeeper](https://github.com/puppetlabs/trapperkeeper)
 services. It provides two things:
 
  * A `call-remote-svc-fn` function used to implement a proxied version
