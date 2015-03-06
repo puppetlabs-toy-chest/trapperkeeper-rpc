@@ -59,16 +59,16 @@
           (testing "and the specified service is not in the local config we see the expected exception"
             (is (thrown-with-msg? RPCException
                                   #".*No entry for service :NoSuchService.*"
-                                  (call-remote-svc-fn rpc-settings :NoSuchService :add 1 1))))
+                                  (call-remote-svc-fn rpc-settings {:svc-id :NoSuchService :fn-name :add :args [1 1]}))))
 
           (testing "and the specified function does not exist on the remote server we see the expected exception"
             (is (thrown-with-msg? RPCException
                                   #".*specified function dne does not exist.*"
-                                  (call-remote-svc-fn rpc-settings :RPCTestService :dne 1 1))))
+                                  (call-remote-svc-fn rpc-settings {:svc-id :RPCTestService :fn-name :dne :args [1 1]}))))
 
           (testing "and the remote function threw an exception"
             (try
-              (call-remote-svc-fn rpc-settings :RPCTestService :fun-divide 2)
+              (call-remote-svc-fn rpc-settings {:svc-id :RPCTestService :fn-name :fun-divide :args [2]})
               (catch Exception e
                 (testing "we see an RPCException"
                   (is (instance? RPCException e))
@@ -82,7 +82,7 @@
           (testing "and the RPC server returns an error status code"
             (with-redefs [http/post (constantly {:status 500 :body "oh no"})]
               (try
-                (call-remote-svc-fn rpc-settings :RPCTestService :add 1 2)
+                (call-remote-svc-fn rpc-settings {:svc-id :RPCTestService :fn-name :add :args [1 2]})
                 (catch Exception e
                   (testing "we see an RPCConnectionException"
                     (is (instance? RPCConnectionException e))
@@ -96,7 +96,7 @@
               (testing "we see the expected exception"
                 (is (thrown-with-msg? RPCConnectionException
                                       #"RPC server is unreachable at endpoint http://localhost:6666"
-                                      (call-remote-svc-fn bad-settings :RPCTestService :add 1 2)))))))))))
+                                      (call-remote-svc-fn bad-settings {:svc-id :RPCTestService :fn-name :add :args [1 2]})))))))))))
 
 (deftest certificate-whitelist
   (let [ssl-config (-> config
@@ -113,7 +113,7 @@
 
         (testing "with a whitelisted cert"
           (with-app-with-config app server-services ssl-config
-            (let [result (call-remote-svc-fn (:rpc ssl-config) :RPCTestService :add 1 2)]
+            (let [result (call-remote-svc-fn (:rpc ssl-config) {:svc-id :RPCTestService :fn-name :add :args [1 2]})]
 
               (testing "the call is successful"
                 (is (= 3 result))))))
@@ -125,7 +125,7 @@
                 (testing "the call throws an RPCAuthenticationException"
                   (is (thrown-with-msg? RPCAuthenticationException
                                         #"Permission denied"
-                                        (call-remote-svc-fn (:rpc ssl-config) :RPCTestService :add 1 2))))))
+                                        (call-remote-svc-fn (:rpc ssl-config) {:svc-id :RPCTestService :fn-name :add :args [1 2]}))))))
 
           (testing "and the request is not signed"
             (let [whitelist-with-http-config (-> (assoc-in ssl-config [:rpc :services :RPCTestService :endpoint] "http://localhost:9001/rpc/call"))]
@@ -136,4 +136,4 @@
                     (testing "the call throws an RPCAuthenticationException"
                       (is (thrown-with-msg? RPCAuthenticationException
                                             #"Permission denied"
-                                            (call-remote-svc-fn (:rpc whitelist-with-http-config) :RPCTestService :add 1 2)))))))))))
+                                            (call-remote-svc-fn (:rpc whitelist-with-http-config) {:svc-id :RPCTestService :fn-name :add :args [1 2]})))))))))))
