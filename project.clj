@@ -1,7 +1,7 @@
 (def ks-version "1.0.0")
 (def tk-version "1.0.1")
 
-(defproject puppetlabs/trapperkeeper-rpc "0.1.2-SNAPSHOT"
+(defproject puppetlabs/trapperkeeper-rpc "1.0.0-SNAPSHOT"
   :description "RPC server/client library for Trapperkeeper services"
   :url "https://github.com/puppetlabs/trapperkeeper-rpc"
   :pedantic? :abort
