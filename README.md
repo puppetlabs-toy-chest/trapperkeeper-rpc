@@ -33,7 +33,7 @@ Planned features:
 ```clojure
 (ns gnarlytimes.services
     (:require [puppetlabs.trapperkeeper.core :refer [defservice]]
-              [puppetlabs.trapperkeeper.rpc.core :refer [call-remote-svc-fn]]))
+              [puppetlabs.trapperkeeper.rpc.core :refer [defremoteservice]]))
 
 ;; (note: TK best practices are eschewed for the sake of brevity)
 
@@ -50,11 +50,10 @@ Planned features:
     (divide [this x y] (/ x y)))
 
 ;; A proxied implementation of MathService for use via RPC
-(defservice remote-math-service
+(defremoteservice remote-math-service
     MathService
-    [[:ConfigService get-in-config]]
-    (add [this x y] (call-remote-svc-fn (get-in-config [:rpc]) :MathService :add x y))
-    (divide [this x y] (call-remote-svc-fn (get-in-config [:rpc]) :MathService :divide x y)))
+    (add [this x y])
+    (divide [this x y]))
 ```
 
 Given the following config:

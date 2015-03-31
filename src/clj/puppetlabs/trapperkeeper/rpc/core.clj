@@ -3,8 +3,10 @@
   (:require [clojure.java.io :as io]
             [puppetlabs.certificate-authority.core :as ssl]
             [puppetlabs.kitchensink.core :refer [cn-whitelist->authorizer]]
-            [puppetlabs.http.client.sync :as http]
+            [puppetlabs.http.client.sync :as http-sync]
+            [puppetlabs.http.client.common :as http-common]
             [slingshot.slingshot :refer [throw+]]
+            [puppetlabs.trapperkeeper.services :refer [service] :as tk-svc]
             [puppetlabs.trapperkeeper.rpc.wire :refer [json-serializer msgpack-serializer decode encode]])
   (:import [puppetlabs.trapperkeeper.rpc RPCException RPCConnectionException RPCAuthenticationException]))
 
@@ -68,34 +70,62 @@
                            (:client-key ssl-settings)
                            (:client-ca ssl-settings))))
 
+(defn https? [^String s] (.startsWith s "https"))
+
+(defn settings->client*
+  "Given a map of RPC settings and a keyword service id, returns a
+  synchronous HTTP client that sets up ssl context if appropriate and
+  no other options."
+  [rpc-settings svc-id]
+  (let [endpoint (get-in rpc-settings [:services svc-id :endpoint])
+        ssl-context (if (https? endpoint) (settings->ssl-context rpc-settings))
+        client-opts (if (some? ssl-context) {:ssl-context ssl-context} {})]
+
+    ;; TODO support an async client for functions where return is
+    ;; not cared about
+    (http-sync/create-client client-opts)))
+
+(def settings->client (memoize settings->client*))
+
 (defn post
   "Given rpc settings, a service id, an endpoint, and a payload, makes
   either an http or https request based on the presence of a cert
   whitelist."
-  [rpc-settings svc-id endpoint payload]
+  [client rpc-settings svc-id endpoint payload]
   (let [encode (partial encode (pick-serializer rpc-settings))
-        basic-opts {:body (encode payload)
-                    :headers {"Content-Type" "application/json;charset=utf-8"}}
-        opts (if (re-find #"^https" endpoint)
-               (assoc basic-opts :ssl-context (settings->ssl-context rpc-settings))
-               basic-opts)]
+        opts {:body (encode payload)
+              :headers {"Content-Type" "application/json;charset=utf-8"}}]
 
-    (http/post endpoint opts)))
+    (http-common/post client endpoint opts)))
 
-(defn call-remote-svc-fn [rpc-settings svc-id fn-name & args]
-  (let [payload {:svc-id svc-id
-                 :fn-name fn-name
-                 :args args}
-        endpoint (get-in rpc-settings [:services svc-id :endpoint])]
+(defn call-remote-svc-fn
+  "Given a map of RPC settings and a map of options with keys :svc-id,
+  :fn-name, :args and optionally :client, calls :fn-name from service
+  :svc-id passing on :args via an HTTP call to the proper RPC
+  endpoint.
 
-    (when (nil? (get-in rpc-settings [:services svc-id]))
-      (throw (RPCException. (format "No entry for service %s in settings." svc-id))))
+  This function is not meant to be used directly unless there is a
+  very good reason. Favor instead the defremoteservice macro."
+  [rpc-settings {:keys [svc-id] :as opts}]
+
+  (when (nil? (get-in rpc-settings [:services svc-id]))
+    (throw (RPCException. (format "No entry for service %s in settings." svc-id))))
+
+  (let [endpoint (get-in rpc-settings [:services svc-id :endpoint])]
 
     (when (nil? endpoint)
       (throw (RPCException. (format "Could not find rpc endpoint for service %s in settings." svc-id))))
 
+
+    (let [payload (select-keys opts [:svc-id :fn-name :args])
+          default-opts {:retry false} ;; TODO more default opts
+          opts (-> opts
+                   (dissoc :svc-id :fn-name :args)
+                   (merge default-opts))
+          client (or (:client opts) (settings->client rpc-settings svc-id))]
+
     (try
-      (let [response (post rpc-settings svc-id endpoint payload)]
+      (let [response (post client rpc-settings svc-id endpoint payload)]
 
         (when-not (= 200 (:status response))
           (throw (RPCConnectionException. (format "RPC service did not return 200. Returned %s instead.\nReceived body: %s"
@@ -111,7 +141,68 @@
           (:result body)))
 
       (catch java.net.ConnectException _
-        (throw (RPCConnectionException. (format "RPC server is unreachable at endpoint %s" endpoint)))))))
+        (throw (RPCConnectionException. (format "RPC server is unreachable at endpoint %s" endpoint))))))))
+
+(defn- parse-fn-forms [fn-forms]
+  (mapv (fn [fn-form]
+          {:fn-name (first fn-form)
+           :fn-sig (second fn-form)
+           :fn-opts (if (= 3 (count fn-form))
+                      (last fn-form)
+                      {})})
+        fn-forms))
+
+(defn- parse-remote-svc-forms [forms]
+  {:service-protocol-sym (first forms)
+   :fn-forms (parse-fn-forms (rest forms))})
+
+;; 17 macron
+(defmacro remote-service
+  "Converts this:
+  (remote-service FooService
+                  (add [this x y])
+                  (divide [this x y] {:retry true :timeout 1000}))
+
+  Into a form roughly like this:
+  (service
+    FooService
+    [[:ConfigService get-in-config]]
+    (add [this x y] (call-remote-svc-fn (get-in-config [:rpc]) {:svc-id :FooService :fn-name :add :args [x y]}))
+    (divide [this x y] (call-remote-svc-fn (get-in-config [:rpc]) {:retry true :timeout 1000 :svc-id :FooService :fn-name :divide :args [x y]})))
+  "
+  [& forms]
+  (let [{:keys [service-protocol-sym fn-forms]} (parse-remote-svc-forms forms)]
+    ;; TODO switch client based on options
+    `(service
+
+      ;; Specify the service protocl
+      ~service-protocol-sym
+
+      ;; Hardcode a list of deps for the service
+      [[:ConfigService ~'get-in-config]]
+
+      ;; function bodies
+      ~@(for [fn-form fn-forms]
+
+          ;; name of function
+          `( ~(:fn-name fn-form)
+
+             ;; function parameters
+             [~@(:fn-sig fn-form)]
+
+               (let [rpc-settings# (~'get-in-config [:rpc])
+                     svc-id# ~(keyword service-protocol-sym)]
+
+                 ;; function body
+                 (call-remote-svc-fn rpc-settings#
+                                     (merge ~(:fn-opts fn-form)
+                                            {:svc-id svc-id#
+                                             :client (settings->client rpc-settings# svc-id#)
+                                             :fn-name ~(keyword (:fn-name fn-form))
+                                             :args [~@(rest (:fn-sig fn-form))]}))))))))
+
+(defmacro defremoteservice [name & forms]
+  `(def ~name (remote-service ~@forms)))
 
 (defn- lookup-fn [rpc-settings svc-id fn-name]
   (when (nil? (get-in rpc-settings [:services svc-id]))
