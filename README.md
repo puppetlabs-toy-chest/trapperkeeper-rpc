@@ -89,7 +89,7 @@ Given the following config:
 and two TK stacks, one with a bootstrap.cfg like this:
 
 ```
-puppetlabs.trapperkeeper.rpc/rpc-server-service
+puppetlabs.trapperkeeper.rpc.services/rpc-server-service
 gnarlytimes.services/math-service
 ```
 
